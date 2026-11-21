@@ -444,8 +444,7 @@ smartgrid-qaoa/
 ├── docs/
 ├── README.md
 ├── requirements.txt
-├── docker-compose.yml
-└── PHASE_STATUS.md
+└── docker-compose.yml
 
 ### 11.2 Backend contract
 The backend will expose endpoints for:

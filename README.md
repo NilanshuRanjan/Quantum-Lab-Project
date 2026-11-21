@@ -58,7 +58,7 @@ http://localhost:8000/
 ### Benchmark runner
 
 ```bash
-python phase7_benchmark.py
+python benchmark.py
 ```
 
 ## API endpoints
