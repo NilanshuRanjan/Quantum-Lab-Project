@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>SmartGrid-QAOA</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .panel {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+      }
+      button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.7rem 1.1rem;
+        cursor: pointer;
+        margin-right: 0.5rem;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      #actionStatus {
+        min-height: 1.25rem;
+        margin: 0.75rem 0 0;
+      }
+      #actionStatus[data-error="true"] {
+        color: #fca5a5;
+      }
+      .chart-grid,
+      .simulation-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .chart-card,
+      .simulation-card,
+      .simulation-view {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 1rem;
+      }
+      .chart-card h3,
+      .simulation-card h3 {
+        margin-top: 0;
+      }
+      .chart-row {
+        margin: 0.8rem 0;
+      }
+      .chart-label,
+      .chart-value {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        font-size: 0.9rem;
+        margin-bottom: 0.3rem;
+      }
+      .chart-track,
+      .simulation-progress-track {
+        height: 0.65rem;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #1e293b;
+      }
+      .chart-fill,
+      .simulation-progress-fill {
+        height: 100%;
+        border-radius: inherit;
+        transition: width 350ms ease;
+      }
+      .chart-note,
+      .simulation-note {
+        color: #94a3b8;
+        font-size: 0.9rem;
+      }
+      .benchmark-caveat {
+        border-left: 4px solid #fbbf24;
+        border-radius: 4px;
+        background: #1e293b;
+        color: #fde68a;
+        padding: 0.75rem 1rem;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        margin-top: 1rem;
+      }
+      .simulation-card {
+        display: flex;
+        flex-direction: column;
+      }
+      .simulation-card p {
+        flex: 1;
+        color: #cbd5e1;
+      }
+      .simulation-view {
+        margin-top: 1rem;
+      }
+      .simulation-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+      }
+      .simulation-controls button {
+        margin: 0;
+      }
+      .circuit-lane {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        padding: 0.75rem;
+        margin: 0.75rem 0;
+        border-radius: 8px;
+        background: #111827;
+      }
+      .circuit-gate {
+        padding: 0.45rem 0.65rem;
+        border: 1px solid #60a5fa;
+        border-radius: 6px;
+        color: #bfdbfe;
+        font-family: Consolas, monospace;
+      }
+      .qubit-map {
+        columns: 2;
+        padding-left: 1.5rem;
+        font-family: Consolas, monospace;
+      }
+      .histogram {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.5rem;
+        min-height: 150px;
+        padding: 0.75rem 0.5rem 0;
+        border-bottom: 1px solid #64748b;
+      }
+      .histogram-column {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        min-width: 2rem;
+        height: 140px;
+        gap: 0.35rem;
+        font-family: Consolas, monospace;
+        font-size: 0.75rem;
+      }
+      .histogram-bar {
+        width: min(100%, 2.5rem);
+        min-height: 2px;
+        border-radius: 4px 4px 0 0;
+        background: #22d3ee;
+      }
+      .histogram-empty {
+        color: #94a3b8;
+      }
+      @media (max-width: 640px) {
+        body {
+          margin: 1rem;
+        }
+        .qubit-map {
+          columns: 1;
+        }
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th, td {
+        border: 1px solid #334155;
+        padding: 0.65rem;
+        text-align: left;
+      }
+      code {
+        font-family: Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SmartGrid-QAOA</h1>
+    <div class="panel">
+      <h2>Scenario summary</h2>
+      <pre id="summary">Loading...</pre>
+    </div>
+    <div class="panel">
+      <button id="runClassical">Run Classical</button>
+      <button id="runQaoa">Run QAOA</button>
+      <button id="runBenchmark">Run Benchmark</button>
+      <button id="refresh">Refresh</button>
+      <p id="actionStatus" role="status" aria-live="polite">Loading dashboard...</p>
+    </div>
+    <div class="panel">
+      <h2>Optimizer results</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Feasible</th>
+            <th>Objective</th>
+            <th>Cost</th>
+            <th>Peak</th>
+            <th>Runtime</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Benchmark summary</h2>
+      <p class="chart-note">Run the benchmark to compare average objective, runtime, and feasibility across the same test suite.</p>
+      <p class="benchmark-caveat">
+        Comparison caveat: QAOA is run on a reduced preview (up to 3 appliances, 12 hours, and 8 binary variables), while the classical methods use the full 6-appliance, 24-hour schedule. Its objective and runtime are not directly comparable to the classical results.
+      </p>
+      <div id="benchmarkSummary" role="status" aria-live="polite">Not run yet.</div>
+      <div id="benchmarkCharts" class="chart-grid"></div>
+      <div class="table-scroll">
+        <table id="benchmarkTable" hidden>
+          <thead>
+            <tr>
+              <th>Algorithm</th>
+              <th>Samples</th>
+              <th>Feasible</th>
+              <th>Mean objective</th>
+              <th>Best objective</th>
+              <th>Mean runtime</th>
+            </tr>
+          </thead>
+          <tbody id="benchmarkBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Algorithm walkthroughs</h2>
+      <p class="simulation-note">
+        Run a method to see its steps. The step sequence explains the algorithm; reported results and the QAOA measurement histogram come from the actual solver run.
+      </p>
+      <div class="simulation-grid">
+        <article class="simulation-card">
+          <h3>MILP</h3>
+          <p>Build a binary scheduling model and search for the minimum-cost feasible schedule.</p>
+          <button data-sim-method="milp">Simulate MILP</button>
+        </article>
+        <article class="simulation-card">
+          <h3>Greedy</h3>
+          <p>Schedule appliances one by one using the best local hour combination.</p>
+          <button data-sim-method="greedy">Simulate Greedy</button>
+        </article>
+        <article class="simulation-card">
+          <h3>Simulated annealing</h3>
+          <p>Explore neighboring schedules and gradually become less likely to accept worse moves.</p>
+          <button data-sim-method="annealing">Simulate Annealing</button>
+        </article>
+        <article class="simulation-card">
+          <h3>QAOA</h3>
+          <p>Encode a compact scheduling problem into a quantum circuit, sample bitstrings, then check feasible schedules.</p>
+          <button data-sim-method="qaoa">Simulate QAOA</button>
+        </article>
+      </div>
+      <div id="simulationOutput" class="simulation-view" aria-live="polite">
+        Choose an algorithm to load its run and step through the walkthrough.
+      </div>
+    </div>
+
+    <script>
+      const methodColors = {
+        MILP: '#a78bfa',
+        Greedy: '#34d399',
+        SimulatedAnnealing: '#fbbf24',
+        StandardQAOA: '#22d3ee'
+      };
+      let simulationTimer = null;
+
+      function setActionStatus(message, isError = false) {
+        const status = document.getElementById('actionStatus');
+        status.textContent = message;
+        status.dataset.error = String(isError);
+      }
+
+      async function requestJson(url, options) {
+        const response = await fetch(url, options);
+        let payload;
+        try {
+          payload = await response.json();
+        } catch {
+          throw new Error(`The server returned an invalid response (HTTP ${response.status}).`);
+        }
+        if (!response.ok) {
+          const detail = payload && (payload.detail || payload.message);
+          throw new Error(detail || `Request failed (HTTP ${response.status}).`);
+        }
+        return payload;
+      }
+
+      async function runAction(label, action) {
+        document.querySelectorAll('button').forEach((button) => {
+          button.disabled = true;
+        });
+        setActionStatus(`${label}...`);
+        try {
+          await action();
+          setActionStatus(`${label} completed.`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          setActionStatus(`${label} failed: ${message}`, true);
+        } finally {
+          document.querySelectorAll('button').forEach((button) => {
+            button.disabled = false;
+          });
+        }
+      }
+
+      async function loadSummary() {
+        await runAction('Refreshing scenario', async () => {
+          const summary = await requestJson('/api/summary');
+          document.getElementById('summary').textContent = JSON.stringify(summary, null, 2);
+        });
+      }
+
+      function renderResults(results) {
+        const body = document.getElementById('resultsBody');
+        body.innerHTML = '';
+        for (const result of results) {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${result.method}</td>
+            <td>${result.feasible ? 'yes' : 'no'}</td>
+            <td>${Number(result.objective_value).toFixed(2)}</td>
+            <td>${Number(result.electricity_cost).toFixed(2)}</td>
+            <td>${Number(result.peak_demand).toFixed(2)}</td>
+            <td>${Number(result.runtime_seconds).toFixed(3)}s</td>
+          `;
+          body.appendChild(row);
+        }
+      }
+
+      function formatNumber(value, digits = 2) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number.toFixed(digits) : '—';
+      }
+
+      function methodName(method) {
+        return {
+          StandardQAOA: 'QAOA',
+          milp: 'MILP',
+          greedy: 'Greedy',
+          annealing: 'Simulated Annealing',
+          qaoa: 'QAOA'
+        }[method] || method;
+      }
+
+      function renderMetricChart(container, title, note, entries, metric, formatter, higherIsBetter = false) {
+        const card = document.createElement('section');
+        card.className = 'chart-card';
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        const chartNote = document.createElement('p');
+        chartNote.className = 'chart-note';
+        chartNote.textContent = note;
+        card.append(heading, chartNote);
+
+        const values = entries.map((entry) => {
+          const value = Number(entry[metric]);
+          return Number.isFinite(value) ? value : 0;
+        });
+        const scale = Math.max(...values, metric === 'feasible_rate' ? 1 : 0);
+
+        entries.forEach((entry, index) => {
+          const value = values[index];
+          const row = document.createElement('div');
+          row.className = 'chart-row';
+          const label = document.createElement('div');
+          label.className = 'chart-label';
+          const method = document.createElement('span');
+          method.textContent = methodName(entry.method);
+          const valueLabel = document.createElement('span');
+          valueLabel.textContent = formatter(value);
+          label.append(method, valueLabel);
+
+          const track = document.createElement('div');
+          track.className = 'chart-track';
+          track.setAttribute('role', 'img');
+          track.setAttribute('aria-label', `${methodName(entry.method)}: ${formatter(value)}`);
+          const fill = document.createElement('div');
+          fill.className = 'chart-fill';
+          fill.style.width = `${scale > 0 ? Math.max(value / scale * 100, value > 0 ? 2 : 0) : 0}%`;
+          fill.style.backgroundColor = methodColors[entry.method] || '#60a5fa';
+          track.appendChild(fill);
+          row.append(label, track);
+          card.appendChild(row);
+        });
+
+        if (higherIsBetter) {
+          const direction = document.createElement('p');
+          direction.className = 'chart-note';
+          direction.textContent = 'Higher is better.';
+          card.appendChild(direction);
+        }
+        container.appendChild(card);
+      }
+
+      function renderBenchmark(payload) {
+        const entries = payload.benchmarks;
+        const charts = document.getElementById('benchmarkCharts');
+        const table = document.getElementById('benchmarkTable');
+        const body = document.getElementById('benchmarkBody');
+        charts.replaceChildren();
+        body.replaceChildren();
+
+        if (!Array.isArray(entries) || entries.length === 0) {
+          table.hidden = true;
+          throw new Error('The benchmark returned no algorithm results.');
+        }
+
+        renderMetricChart(charts, 'Mean objective', 'Lower is better; bars share this run’s scale.', entries, 'objective_mean', (value) => formatNumber(value));
+        renderMetricChart(charts, 'Mean runtime', 'Seconds per run; lower is faster.', entries, 'runtime_mean', (value) => `${formatNumber(value, 3)} s`);
+        renderMetricChart(charts, 'Feasibility rate', 'Fraction of schedules that passed validation.', entries, 'feasible_rate', (value) => `${formatNumber(value * 100, 0)}%`, true);
+
+        entries.forEach((entry) => {
+          const row = document.createElement('tr');
+          const cells = [
+            methodName(entry.method),
+            String(entry.samples),
+            `${formatNumber(Number(entry.feasible_rate) * 100, 0)}%`,
+            formatNumber(entry.objective_mean),
+            formatNumber(entry.objective_best),
+            `${formatNumber(entry.runtime_mean, 3)} s`
+          ];
+          cells.forEach((value) => {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            row.appendChild(cell);
+          });
+          body.appendChild(row);
+        });
+        table.hidden = false;
+        document.getElementById('benchmarkSummary').textContent =
+          `Compared ${entries.length} algorithms across ${entries[0].samples} seeded runs each.`;
+      }
+
+      function getWalkthrough(method, result) {
+        const objective = formatNumber(result.objective_value);
+        if (method === 'milp') {
+          return [
+            ['Build the binary model', 'Create one binary decision for each appliance and allowed hour, then define energy cost, peak demand, and discomfort.'],
+            ['Add scheduling constraints', 'Require each appliance to run for its requested duration inside its allowed time window.'],
+            ['Search for the optimum', `CBC solves the mixed-integer model (${result.details?.status || 'solver completed'}), balancing the objective against the constraints.`],
+            ['Validate the schedule', `The returned schedule is ${result.feasible ? 'feasible' : 'infeasible'} with objective ${objective}.`]
+          ];
+        }
+        if (method === 'greedy') {
+          return [
+            ['Rank appliances', 'Prioritize larger energy jobs and jobs with tighter time windows.'],
+            ['Try allowed hour combinations', 'For the current appliance, score valid combinations using tariff, preference discomfort, and estimated peak demand.'],
+            ['Commit the best local choice', 'Keep the lowest-scoring combination and move to the next appliance; earlier choices are not globally reconsidered.'],
+            ['Check the complete schedule', `The final schedule is ${result.feasible ? 'feasible' : 'infeasible'} with objective ${objective}. A greedy result is a heuristic, not a proof of global optimality.`]
+          ];
+        }
+        if (method === 'annealing') {
+          return [
+            ['Create an initial schedule', 'The solver creates appliance start times and measures the starting objective.'],
+            ['Propose a neighboring schedule', 'Choose one appliance and swap one active hour with an inactive allowed hour, preserving its duration.'],
+            ['Accept or reject the move', 'Always accept an improvement; sometimes accept a worse move according to the current temperature to escape local minima.'],
+            ['Cool and repeat', `Try up to ${result.details?.iterations || 2500} moves, cooling after valid candidates. Final temperature: ${formatNumber(result.details?.temperature, 3)}; returned objective: ${objective}.`]
+          ];
+        }
+
+        const details = result.details || {};
+        const gamma = result.parameters?.gamma || [];
+        const beta = result.parameters?.beta || [];
+        const variableCount = Array.isArray(details.variables) ? details.variables.length : result.qubits;
+        return [
+          ['Encode the compact schedule', `Map ${variableCount} selected appliance-hour decisions to binary variables and build a QUBO cost matrix (${details.qubo_shape?.join(' × ') || `${variableCount} × ${variableCount}`}).`],
+          ['Prepare a superposition', `Apply a Hadamard gate to each of the ${result.qubits} qubits so candidate bitstrings can be explored together.`],
+          ['Apply cost and mixer layers', `Repeat ${result.circuit_depth} QAOA layer(s): the cost operator adds RZ/RZZ phase rotations; the mixer applies RX rotations to move between candidates.`],
+          ['Tune the angles classically', `A classical optimizer updates γ = [${gamma.map((value) => formatNumber(value, 2)).join(', ')}] and β = [${beta.map((value) => formatNumber(value, 2)).join(', ')}] to reduce expected Ising energy.`],
+          ['Measure candidate bitstrings', `Sample the simulated circuit ${result.shots} times. The histogram below is built from the actual measurement counts returned by this run.`],
+          ['Decode and validate', `Convert measured bits to appliance hours, discard infeasible samples, and report the best feasible schedule found. Objective: ${objective}. This is a compact Qiskit Aer simulation, not a quantum-hardware run.`]
+        ];
+      }
+
+      function addQaoaDetails(container, result) {
+        const section = document.createElement('section');
+        const heading = document.createElement('h4');
+        heading.textContent = 'QAOA circuit and sampled outcomes';
+        section.appendChild(heading);
+        const circuit = document.createElement('div');
+        circuit.className = 'circuit-lane';
+        circuit.setAttribute('role', 'img');
+        circuit.setAttribute('aria-label', `Hadamard preparation followed by ${result.circuit_depth} cost and mixer layers and measurement`);
+        ['H on each qubit'].forEach((label) => {
+          const gate = document.createElement('span');
+          gate.className = 'circuit-gate';
+          gate.textContent = label;
+          circuit.appendChild(gate);
+        });
+        for (let layer = 1; layer <= result.circuit_depth; layer += 1) {
+          for (const label of [`Cost U_C(γ${layer})`, `Mixer U_M(β${layer})`]) {
+            const gate = document.createElement('span');
+            gate.className = 'circuit-gate';
+            gate.textContent = label;
+            circuit.appendChild(gate);
+          }
+        }
+        const measurement = document.createElement('span');
+        measurement.className = 'circuit-gate';
+        measurement.textContent = 'Measure';
+        circuit.appendChild(measurement);
+        section.appendChild(circuit);
+
+        const variables = result.details?.variables;
+        if (Array.isArray(variables) && variables.length > 0) {
+          const mappingTitle = document.createElement('h4');
+          mappingTitle.textContent = 'Qubit-to-decision mapping';
+          const mapping = document.createElement('ol');
+          mapping.className = 'qubit-map';
+          variables.forEach((variable, index) => {
+            const item = document.createElement('li');
+            item.textContent = `q${index}: ${variable[0]} at hour ${variable[1]}`;
+            mapping.appendChild(item);
+          });
+          section.append(mappingTitle, mapping);
+        }
+
+        const counts = result.details?.counts;
+        const histogramTitle = document.createElement('h4');
+        histogramTitle.textContent = 'Measured bitstring distribution';
+        section.appendChild(histogramTitle);
+        const histogram = document.createElement('div');
+        histogram.className = 'histogram';
+        const outcomes = counts && typeof counts === 'object'
+          ? Object.entries(counts).map(([bitstring, count]) => [bitstring, Number(count)]).filter((entry) => Number.isFinite(entry[1]) && entry[1] > 0)
+          : [];
+        outcomes.sort((a, b) => b[1] - a[1]);
+        const topOutcomes = outcomes.slice(0, 8);
+        const total = outcomes.reduce((sum, entry) => sum + entry[1], 0);
+        const largestProbability = topOutcomes.length ? topOutcomes[0][1] / total : 0;
+        if (total > 0) {
+          topOutcomes.forEach(([bitstring, count]) => {
+            const probability = count / total;
+            const column = document.createElement('div');
+            column.className = 'histogram-column';
+            column.title = `${bitstring}: ${(probability * 100).toFixed(1)}%`;
+            const value = document.createElement('span');
+            value.textContent = `${(probability * 100).toFixed(0)}%`;
+            const bar = document.createElement('div');
+            bar.className = 'histogram-bar';
+            bar.style.height = `${Math.max(probability / largestProbability * 100, 2)}%`;
+            const label = document.createElement('span');
+            label.textContent = bitstring;
+            column.append(value, bar, label);
+            histogram.appendChild(column);
+          });
+        } else {
+          const empty = document.createElement('p');
+          empty.className = 'histogram-empty';
+          empty.textContent = 'No measurement distribution was included in this result.';
+          histogram.appendChild(empty);
+        }
+        section.appendChild(histogram);
+        const note = document.createElement('p');
+        note.className = 'chart-note';
+        note.textContent = 'Bars show the relative frequency among the measured bitstrings; only the eight most frequent outcomes are displayed.';
+        section.appendChild(note);
+        container.appendChild(section);
+      }
+
+      function renderSimulation(method, result) {
+        if (simulationTimer !== null) {
+          window.clearInterval(simulationTimer);
+          simulationTimer = null;
+        }
+        const output = document.getElementById('simulationOutput');
+        output.replaceChildren();
+        const title = document.createElement('h3');
+        title.textContent = `${methodName(result.method)} walkthrough`;
+        const summary = document.createElement('p');
+        summary.className = 'chart-note';
+        summary.textContent = `Actual solver result: objective ${formatNumber(result.objective_value)}, ${result.feasible ? 'feasible' : 'infeasible'}, runtime ${formatNumber(result.runtime_seconds, 3)} s.`;
+        const progress = document.createElement('div');
+        progress.className = 'simulation-progress-track';
+        progress.setAttribute('aria-label', 'Walkthrough progress');
+        const progressFill = document.createElement('div');
+        progressFill.className = 'simulation-progress-fill';
+        progressFill.style.backgroundColor = methodColors[result.method] || '#60a5fa';
+        progress.appendChild(progressFill);
+        const stepHeading = document.createElement('h4');
+        const stepDescription = document.createElement('p');
+        const counter = document.createElement('p');
+        counter.className = 'chart-note';
+        const controls = document.createElement('div');
+        controls.className = 'simulation-controls';
+        const previous = document.createElement('button');
+        previous.textContent = 'Previous step';
+        const play = document.createElement('button');
+        play.textContent = 'Play';
+        const next = document.createElement('button');
+        next.textContent = 'Next step';
+        controls.append(previous, play, next);
+        output.append(title, summary, progress, counter, stepHeading, stepDescription, controls);
+
+        const steps = getWalkthrough(method, result);
+        let currentStep = 0;
+        const drawStep = () => {
+          const [stepTitle, description] = steps[currentStep];
+          counter.textContent = `Step ${currentStep + 1} of ${steps.length}`;
+          stepHeading.textContent = stepTitle;
+          stepDescription.textContent = description;
+          progressFill.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+          previous.disabled = currentStep === 0;
+          next.disabled = currentStep === steps.length - 1;
+        };
+        const stopPlayback = () => {
+          if (simulationTimer !== null) {
+            window.clearInterval(simulationTimer);
+            simulationTimer = null;
+          }
+          play.textContent = 'Play';
+        };
+        previous.addEventListener('click', () => {
+          stopPlayback();
+          currentStep = Math.max(0, currentStep - 1);
+          drawStep();
+        });
+        next.addEventListener('click', () => {
+          currentStep = Math.min(steps.length - 1, currentStep + 1);
+          if (currentStep === steps.length - 1) {
+            stopPlayback();
+          }
+          drawStep();
+        });
+        play.addEventListener('click', () => {
+          if (simulationTimer !== null) {
+            stopPlayback();
+            return;
+          }
+          play.textContent = 'Pause';
+          simulationTimer = window.setInterval(() => {
+            if (currentStep >= steps.length - 1) {
+              stopPlayback();
+              return;
+            }
+            currentStep += 1;
+            drawStep();
+          }, 1600);
+        });
+        drawStep();
+        if (method === 'qaoa') {
+          addQaoaDetails(output, result);
+        }
+      }
+
+      async function runClassical() {
+        await runAction('Running classical optimizers', async () => {
+          const payload = await requestJson('/api/optimize', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ method: 'all' })
+          });
+          renderResults(payload.results);
+        });
+      }
+
+      async function runQaoa() {
+        await runAction('Running QAOA', async () => {
+          const payload = await requestJson('/api/optimize', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ method: 'qaoa', shots: 256, seed: 7, p: 2, appliance_limit: 3, hour_limit: 12 })
+          });
+          renderResults(payload.results);
+        });
+      }
+
+      async function runBenchmark() {
+        await runAction('Running benchmark', async () => {
+          const payload = await requestJson('/api/benchmark', { method: 'POST' });
+          renderBenchmark(payload);
+        });
+      }
+
+      document.getElementById('runClassical').addEventListener('click', runClassical);
+      document.getElementById('runQaoa').addEventListener('click', runQaoa);
+      document.getElementById('runBenchmark').addEventListener('click', runBenchmark);
+      document.getElementById('refresh').addEventListener('click', loadSummary);
+      document.querySelectorAll('[data-sim-method]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const method = button.dataset.simMethod;
+          const request = {
+            method,
+            seed: 7,
+            iterations: 2500,
+            shots: 256,
+            p: 2,
+            appliance_limit: 3,
+            hour_limit: 12
+          };
+          await runAction(`Loading ${methodName(method)}`, async () => {
+            const payload = await requestJson('/api/optimize', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(request)
+            });
+            if (!Array.isArray(payload.results) || payload.results.length === 0) {
+              throw new Error('The optimizer returned no result for this walkthrough.');
+            }
+            renderSimulation(method, payload.results[0]);
+          });
+        });
+      });
+      runAction('Loading dashboard', async () => {
+        const [summary, payload] = await Promise.all([
+          requestJson('/api/summary'),
+          requestJson('/api/optimize', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ method: 'all' })
+          })
+        ]);
+        document.getElementById('summary').textContent = JSON.stringify(summary, null, 2);
+        renderResults(payload.results);
+      });
+    </script>
+  </body>
+</html>

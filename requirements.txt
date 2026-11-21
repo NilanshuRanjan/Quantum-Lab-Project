@@ -1,0 +1,7 @@
+numpy>=1.26.0
+pulp>=2.8.0
+qiskit>=2.0.0
+qiskit-aer>=0.18.0
+textual>=0.82.0
+fastapi>=0.115.0
+uvicorn>=0.30.0
